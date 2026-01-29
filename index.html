@@ -1,0 +1,269 @@
+<!DOCTYPE html>
+<html lang="hu">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Casino</title>
+<style>
+body {
+  margin:0;
+  font-family:'Arial', sans-serif;
+  background: linear-gradient(to bottom, #1e1e1e, #0f0f0f);
+  display:flex;
+  justify-content:center;
+  align-items:center;
+  min-height:100vh;
+  padding:10px;
+  box-sizing:border-box;
+  color:#fff;
+}
+.container {
+  background:#2c3e50;
+  padding:20px;
+  border-radius:20px;
+  text-align:center;
+  width:100%;
+  max-width:600px;
+  box-shadow:0 10px 25px rgba(0,0,0,0.6);
+}
+h1 {
+  color:#f1c40f;
+  margin-bottom:15px;
+  font-size:2.5em;
+  text-shadow:2px 2px #000;
+}
+.balance { font-size:1.2em; margin-bottom:10px; }
+.slot { display:flex; justify-content:center; margin-bottom:20px; flex-wrap:wrap; }
+.reel {
+  background:#ecf0f1;
+  color:#2c3e50;
+  width:28%;
+  min-width:80px;
+  height:0;
+  padding-bottom:28%;
+  margin:0 5px;
+  font-size:2em;
+  border-radius:15px;
+  display:flex;
+  justify-content:center;
+  align-items:center;
+  box-shadow:inset 0 0 10px rgba(0,0,0,0.3);
+  transition: background 0.3s, transform 0.3s;
+  position:relative;
+}
+.reel span{
+  position:absolute;
+  top:50%;
+  left:50%;
+  transform:translate(-50%,-50%);
+}
+button { padding:10px 20px; font-size:1em; border:none; border-radius:10px; cursor:pointer; margin:5px; box-shadow:2px 2px 5px rgba(0,0,0,0.3); width:48%; max-width:200px; }
+#spin { background:#e67e22; color:white; }
+#shop { background:#27ae60; color:white; }
+#withdraw { background:#c0392b; color:white; }
+#toggleMusic { background:#8e44ad; color:white; }
+.shop-options { display:none; margin-top:10px; }
+.shop-options button { display:block; margin:5px auto; width:80%; background:#3498db; color:white; }
+.message { margin-top:15px; font-size:1em; height:30px; color:#f39c12; font-weight:bold; }
+#leaderboard { margin-top:15px; font-size:0.9em; color:#ecf0f1; text-align:left; }
+label, select, input { font-size:1em; color:#ecf0f1; margin:5px; }
+@media(max-width:400px){
+  .reel { width:28%; padding-bottom:28%; margin:0 3%; font-size:1.5em; }
+  button { width:90%; margin:5px 0; }
+}
+</style>
+</head>
+<body>
+
+<div class="container">
+  <h1>Casino</h1>
+  <div class="balance">Egyenleg: <span id="balance">500</span> RON</div>
+
+  <!-- Tét kiválasztás -->
+  <div style="margin-bottom:15px;">
+    <label for="bet">Tét:</label>
+    <select id="bet">
+      <option value="10">10 RON</option>
+      <option value="20">20 RON</option>
+      <option value="50">50 RON</option>
+      <option value="100">100 RON</option>
+    </select>
+  </div>
+
+  <div class="slot">
+    <div class="reel" id="reel1"><span>🍒</span></div>
+    <div class="reel" id="reel2"><span>🍋</span></div>
+    <div class="reel" id="reel3"><span>🍊</span></div>
+  </div>
+
+  <button id="spin">SPIN</button>
+  <button id="shop">Pénz aktiválás</button>
+  <button id="withdraw">Pénz kiutalás</button>
+  <button id="toggleMusic">Zene: Be</button>
+
+  <div class="shop-options" id="shopOptions">
+    <button data-amount="100">Csomag 1: 100 RON</button>
+    <button data-amount="300">Csomag 2: 300 RON</button>
+    <button data-amount="500">Csomag 3: 500 RON</button>
+  </div>
+
+  <div>
+    <label for="volume">Hangerő:</label>
+    <input type="range" id="volume" min="0" max="1" step="0.05" value="0.2">
+  </div>
+
+  <div class="message" id="message"></div>
+  <div id="leaderboard"></div>
+</div>
+
+<!-- Zene és nyerés hang -->
+<audio id="bgMusic" loop>
+  <source src="zene.mp3" type="audio/mpeg">
+</audio>
+<audio id="winSound">
+  <source src="taps.mp3" type="audio/mpeg">
+</audio>
+
+<script>
+let balance = parseInt(localStorage.getItem("casinoBalance")) || 500;
+let leaderboardData = JSON.parse(localStorage.getItem("casinoLeaderboard")) || [];
+const symbols = ["🍒","🍋","🍊","🍉","💎","7️⃣"];
+const reelEls = [
+  document.getElementById("reel1").querySelector("span"),
+  document.getElementById("reel2").querySelector("span"),
+  document.getElementById("reel3").querySelector("span")
+];
+const balanceEl = document.getElementById("balance");
+const messageEl = document.getElementById("message");
+const shopEl = document.getElementById("shop");
+const shopOptionsEl = document.getElementById("shopOptions");
+const withdrawEl = document.getElementById("withdraw");
+const leaderboardEl = document.getElementById("leaderboard");
+const bgMusic = document.getElementById("bgMusic");
+const winSound = document.getElementById("winSound");
+const toggleMusic = document.getElementById("toggleMusic");
+const volumeSlider = document.getElementById("volume");
+
+bgMusic.volume = 0.2;
+winSound.volume = 0.5;
+
+function saveState(){
+  localStorage.setItem("casinoBalance", balance);
+  localStorage.setItem("casinoLeaderboard", JSON.stringify(leaderboardData));
+}
+
+function updateBalance(){ 
+  balanceEl.innerText = balance; 
+  saveState();
+}
+
+function updateLeaderboard(){ 
+  leaderboardEl.innerHTML = "🏆 Legnagyobb nyeremények:<br>";
+  leaderboardData.slice(-5).reverse().forEach(l=>{
+    leaderboardEl.innerHTML += `- ${l} RON<br>`;
+  });
+  saveState();
+}
+
+function highlightWin(reels){
+  reels.forEach(r=>{
+    r.parentElement.style.background="#f1c40f";
+    setTimeout(()=>r.parentElement.style.background="#ecf0f1",500);
+  });
+}
+
+function playWinSound(){
+  winSound.currentTime=0;
+  winSound.play();
+}
+
+function spin(){
+  const bet = parseInt(document.getElementById("bet").value);
+  if(balance<bet){ messageEl.innerText="Nincs elég pénzed ehhez a téthez!"; return; }
+  balance-=bet; updateBalance(); messageEl.innerText="";
+
+  let finalSymbols = [];
+  let jackpotCount = 0;
+  for(let i=0;i<3;i++){
+    if(Math.random()<0.02 && jackpotCount<3){ finalSymbols[i]="💰"; jackpotCount++; }
+    else if(Math.random()<0.35){ finalSymbols[i]=symbols[Math.floor(Math.random()*symbols.length)]; if(finalSymbols[i]==="💰") finalSymbols[i]="🍒";}
+    else{ finalSymbols[i]=symbols[Math.floor(Math.random()*symbols.length)]; if(finalSymbols[i]==="💰") finalSymbols[i]="🍋";}
+  }
+
+  reelEls.forEach((reel,i)=>{
+    let count=0;
+    const interval = setInterval(()=>{
+      reel.innerText=symbols[Math.floor(Math.random()*symbols.length)];
+      reel.parentElement.style.transform=`rotate(${Math.random()*10-5}deg)`;
+      count++;
+      if(count>10+i*5){ 
+        reel.innerText=finalSymbols[i]; 
+        reel.parentElement.style.transform="rotate(0deg)"; 
+        clearInterval(interval); 
+        if(i===2) checkResult(finalSymbols, bet); 
+      }
+    },50);
+  });
+}
+
+function checkResult(res, bet){
+  let win=0;
+  if(res[0]===res[1] && res[1]===res[2]){
+    win = (res[0]==="💰")? bet*20 : bet*5; 
+    highlightWin(reelEls);
+  } else if(res[0]===res[1] || res[1]===res[2] || res[0]===res[2]){
+    win = bet*2;
+    highlightWin(reelEls.filter((r,i)=>res[i]===res[(i+1)%3]));
+  }
+  if(win>0){
+    balance+=win; 
+    messageEl.innerText=`🎉 Nyertél: +${win} RON 🎉`; 
+    leaderboardData.push(win); 
+    updateLeaderboard();
+    playWinSound();
+  } else messageEl.innerText="Nem nyertél 😢";
+  updateBalance();
+}
+
+// Shop
+shopEl.addEventListener("click",()=>{ shopOptionsEl.style.display = shopOptionsEl.style.display==="none"?"block":"none"; });
+shopOptionsEl.querySelectorAll("button").forEach(btn=>{
+  btn.addEventListener("click",()=>{
+    const amt = parseInt(btn.getAttribute("data-amount"));
+    balance += amt; updateBalance();
+    messageEl.innerText = `Megvásároltad a csomagot: +${amt} RON`;
+  });
+});
+
+// Pénz kiutalás
+withdrawEl.addEventListener("click",()=>{
+  if(balance<=0){ alert("Nincs pénzed kiutalni!"); return; }
+  if(confirm(`Biztos ki szeretnéd utalni a teljes egyenleged: ${balance} RON?`)){
+    balance=0;
+    updateBalance();
+    messageEl.innerText="A pénzed ki lett utalva 💸";
+  }
+});
+
+// Zene kezelése
+toggleMusic.addEventListener("click", ()=>{
+  if(bgMusic.paused){
+    bgMusic.play();
+    toggleMusic.innerText="Zene: Be";
+  } else {
+    bgMusic.pause();
+    toggleMusic.innerText="Zene: Ki";
+  }
+});
+volumeSlider.addEventListener("input", ()=>{
+  bgMusic.volume = volumeSlider.value;
+  winSound.volume = volumeSlider.value;
+});
+
+updateBalance();
+updateLeaderboard();
+document.getElementById("spin").addEventListener("click",spin);
+</script>
+
+</body>
+</html>
